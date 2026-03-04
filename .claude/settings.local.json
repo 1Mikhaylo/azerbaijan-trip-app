@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:unsplash.com)",
+      "Bash(curl -s \"https://unsplash.com/photos/the-maiden-tower-stands-tall-in-baku-azerbaijan-c_JTgEhLS3g\")",
+      "Bash(curl -s \"https://unsplash.com/photos/pGazEh2Vh9I\")",
+      "Bash(curl -s \"https://unsplash.com/photos/AOWi0OXBUQo\")",
+      "Bash(curl -s \"https://unsplash.com/photos/our1UWhCMKk\")",
+      "Bash(curl -L -A \"Mozilla/5.0\" \"https://unsplash.com/photos/pGazEh2Vh9I\")",
+      "Bash(curl -L -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" \"https://unsplash.com/photos/pGazEh2Vh9I\")",
+      "Bash(curl -s \"https://api.unsplash.com/search/photos?query=gobustan+azerbaijan&per_page=3\" -H \"Authorization: Client-ID demo\")",
+      "Bash(npx expo install expo-linear-gradient)"
+    ]
+  }
+}
