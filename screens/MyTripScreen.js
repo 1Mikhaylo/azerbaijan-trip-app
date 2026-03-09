@@ -15,13 +15,26 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { places } from '../data/places.js';
 import { useTripContext } from '../context/TripContext';
+import { Colors } from '../constants/colors';
 
-const ACCENT = '#2ecc71';
 const CATEGORIES = ['All', 'History', 'Nature', 'City'];
 const CARD_HEIGHT = 240;
 const CARD_MARGIN = 16;
 const CARD_SLOT = CARD_HEIGHT + CARD_MARGIN;
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Reusable pill button
+function PillButton({ label, active, onPress }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={[styles.pill, active && styles.pillActive]}
+    >
+      <Text style={[styles.pillText, active && styles.pillTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
 function PopularCard({ item }) {
   return (
@@ -72,9 +85,11 @@ function ListCard({ item, scale }) {
 
 export default function TripsScreen() {
   const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
   const [activeCategory, setActiveCategory] = useState('All');
   const [headerHeight, setHeaderHeight] = useState(600);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const { isFavourite } = useTripContext();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -82,11 +97,11 @@ export default function TripsScreen() {
       const matchesSearch =
         p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q);
       const matchesCategory = activeCategory === 'All' || p.category === activeCategory;
-      return matchesSearch && matchesCategory;
+      const matchesFavourite = activeFilter === 'All' || isFavourite(p.id);
+      return matchesSearch && matchesCategory && matchesFavourite;
     });
-  }, [search, activeCategory]);
+  }, [search, activeCategory, activeFilter, isFavourite]);
 
-  // Per-card scale: each card grows to 1.0 as it enters the center of the screen
   const scaleInterpolations = useMemo(() => {
     return filtered.reduce((acc, item, i) => {
       const cardCenterY = headerHeight + i * CARD_SLOT + CARD_HEIGHT / 2;
@@ -114,7 +129,6 @@ export default function TripsScreen() {
         { useNativeDriver: true }
       )}
     >
-      {/* Header + Popular — measured so card Y positions are accurate */}
       <View onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
         <View style={styles.header}>
           <Text style={styles.title}>Welcome to Azerbaijan</Text>
@@ -126,48 +140,67 @@ export default function TripsScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Search places..."
-            placeholderTextColor="#aaa"
+            placeholderTextColor={Colors.textGrey}
             value={search}
             onChangeText={setSearch}
           />
         </View>
 
+        {/* All / Favourites toggle */}
+        <View style={styles.filterRow}>
+          {['All', 'Favourites'].map((f) => (
+            <PillButton
+              key={f}
+              label={f}
+              active={activeFilter === f}
+              onPress={() => setActiveFilter(f)}
+            />
+          ))}
+        </View>
+
+        {/* Category pills */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pillsRow}
         >
           {CATEGORIES.map((cat) => (
-            <TouchableOpacity
+            <PillButton
               key={cat}
+              label={cat}
+              active={activeCategory === cat}
               onPress={() => setActiveCategory(cat)}
-              style={[styles.pill, activeCategory === cat && styles.pillActive]}
+            />
+          ))}
+        </ScrollView>
+
+        {activeFilter === 'All' && (
+          <>
+            <Text style={styles.sectionTitle}>Popular Places</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.popularRow}
             >
-              <Text style={[styles.pillText, activeCategory === cat && styles.pillTextActive]}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              {places.map((item) => (
+                <PopularCard key={item.id} item={item} />
+              ))}
+            </ScrollView>
+          </>
+        )}
 
-        <Text style={styles.sectionTitle}>Popular Places</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.popularRow}
-        >
-          {filtered.map((item) => (
-            <PopularCard key={item.id} item={item} />
-          ))}
-        </ScrollView>
-
-        <Text style={styles.sectionTitle}>All Places</Text>
+        <Text style={styles.sectionTitle}>
+          {activeFilter === 'Favourites' ? 'Favourite Places' : 'All Places'}
+        </Text>
       </View>
 
-      {/* All Places cards */}
       <View style={styles.listSection}>
         {filtered.length === 0 ? (
-          <Text style={styles.emptyText}>No places match your search.</Text>
+          <Text style={styles.emptyText}>
+            {activeFilter === 'Favourites'
+              ? 'No favourites yet! Tap ❤️ to save a place.'
+              : 'No places match your search.'}
+          </Text>
         ) : (
           filtered.map((item) => (
             <ListCard
@@ -194,10 +227,11 @@ const cardShadow = Platform.select({
   android: { elevation: 5 },
 });
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.white,
   },
 
   // Header
@@ -209,11 +243,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#111',
+    color: Colors.textDark,
   },
   subtitle: {
     fontSize: 15,
-    color: '#888',
+    color: Colors.textGrey,
     marginTop: 4,
   },
 
@@ -221,7 +255,7 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: Colors.backgroundLight,
     borderRadius: 14,
     marginHorizontal: 20,
     paddingHorizontal: 14,
@@ -235,31 +269,41 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#111',
+    color: Colors.textDark,
   },
 
-  // Pills
+  // All / Favourites toggle row
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+
+  // Category pills row
   pillsRow: {
     paddingHorizontal: 20,
     gap: 10,
     marginBottom: 24,
   },
+
+  // Pill button — shared by both filter toggle and category pills
   pill: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: Colors.backgroundLight,
   },
   pillActive: {
-    backgroundColor: ACCENT,
+    backgroundColor: Colors.primary,
   },
   pillText: {
     fontSize: 13,
-    color: '#555',
+    color: Colors.primary,
     fontWeight: '500',
   },
   pillTextActive: {
-    color: '#fff',
+    color: Colors.white,
     fontWeight: '700',
   },
 
@@ -267,7 +311,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111',
+    color: Colors.textDark,
     paddingHorizontal: 20,
     marginBottom: 14,
   },
@@ -292,17 +336,17 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: ACCENT,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   popArrowText: {
-    color: '#fff',
+    color: Colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
   popName: {
-    color: '#fff',
+    color: Colors.white,
     fontSize: 15,
     fontWeight: 'bold',
     textShadowColor: 'rgba(0,0,0,0.6)',
@@ -336,12 +380,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: ACCENT,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   listArrowText: {
-    color: '#fff',
+    color: Colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -356,7 +400,7 @@ const styles = StyleSheet.create({
   listName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: Colors.white,
   },
   listDesc: {
     fontSize: 12,
@@ -373,9 +417,10 @@ const styles = StyleSheet.create({
 
   // Empty
   emptyText: {
-    color: '#aaa',
+    color: Colors.textGrey,
     fontSize: 14,
     textAlign: 'center',
-    paddingVertical: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
   },
 });
