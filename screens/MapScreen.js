@@ -5,22 +5,41 @@ import {
   Image,
   Text,
   TouchableOpacity,
-  Alert,
   Animated,
+  Dimensions,
 } from 'react-native';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Feather } from '@expo/vector-icons';
 import places from '../data/places';
 
+const { width } = Dimensions.get('window');
+
+// ─── Design System ────────────────────────────────────────────────────────────
+const COLORS = {
+  primary:    '#1A56DB',   // Azerbaijan blue
+  accent:     '#E63946',
+  green:      '#00A651',
+  white:      '#FFFFFF',
+  dark:       '#111111',
+  card:       '#1C1C1E',
+  border:     '#2C2C2E',
+  textLight:  '#F2F2F7',
+  textGray:   '#8E8E93',
+};
+
+// ─── Map Style ────────────────────────────────────────────────────────────────
 const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#212121' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#383838' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#2c2c2c' }] },
-  { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#ffffff' }, { weight: 1.5 }] },
+  { elementType: 'geometry',            stylers: [{ color: '#1a1a1a' }] },
+  { elementType: 'labels.text.fill',    stylers: [{ color: '#6b6b6b' }] },
+  { elementType: 'labels.text.stroke',  stylers: [{ color: '#1a1a1a' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d0d0d' }] },
+  { featureType: 'road',  elementType: 'geometry', stylers: [{ color: '#2c2c2c' }] },
+  { featureType: 'poi',   elementType: 'geometry', stylers: [{ color: '#222222' }] },
+  {
+    featureType: 'administrative.country',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#ffffff' }, { weight: 1.5 }],
+  },
 ];
 
 const AZERBAIJAN_BOUNDS = {
@@ -28,128 +47,98 @@ const AZERBAIJAN_BOUNDS = {
   southWest: { latitude: 38.4, longitude: 44.8 },
 };
 
-const bakuPlaces = places.filter((place) => place.city === 'Baku');
+const bakuPlaces = places.filter(p => p.city === 'Baku');
 
-// Colors
-const COLORS = {
-  primary: '#1E3A5F',
-  accent: '#E63946',
-  green: '#00A651',
-  white: '#FFFFFF',
-  dark: '#1A1A1A',
-  darkCard: '#2A2A2A',
-  textLight: '#E0E0E0',
-  textGray: '#999999',
-};
+// ─── Marker Component ─────────────────────────────────────────────────────────
+function PlaceMarker({ place, isSelected, onPress }) {
+  const [tracks, setTracks] = useState(true);
 
-// Marker with Simple Callout (STEP 1 - Testing)
-function PlaceMarker({ place, onCalloutPress, onMarkerPress }) {
+  useEffect(() => {
+    const t = setTimeout(() => setTracks(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <Marker
       identifier={`place-${place.id}`}
-      coordinate={{
-        latitude: place.latitude,
-        longitude: place.longitude,
-      }}
-      onPress={() => onMarkerPress(place)}
+      coordinate={{ latitude: place.latitude, longitude: place.longitude }}
+      onPress={() => onPress(place)}
+      onSelect={() => onPress(place)}
+      tracksViewChanges={tracks}
     >
-      {/* Circle Photo Marker */}
-      <View style={styles.markerContainer}>
-        <Image
-          source={place.photo}
-          style={styles.markerImage}
-          resizeMode="cover"
-        />
+      <View style={[styles.marker, isSelected && styles.markerSelected]}>
+        <Image source={place.photo} style={styles.markerImage} resizeMode="cover" />
       </View>
-
-      {/* Callout - Minimal (Tripomatic Style) */}
-      <Callout
-        tooltip
-        onPress={() => onCalloutPress(place)}
-      >
-        <View style={styles.calloutContainer}>
-          
-          {/* Content */}
-          <View style={styles.calloutContent}>
-            
-            {/* Photo */}
-            <Image
-              source={place.photo}
-              style={styles.calloutPhoto}
-              resizeMode="cover"
-            />
-
-            {/* Info */}
-            <View style={styles.calloutInfo}>
-              <Text style={styles.calloutName} numberOfLines={2}>
-                {place.name}
-              </Text>
-              <Text style={styles.calloutCity}>
-                📍 {place.city}
-              </Text>
-            </View>
-
-          </View>
-
-        </View>
+      <Callout tooltip>
+        <View style={{ width: 1, height: 1 }} />
       </Callout>
-
     </Marker>
   );
 }
 
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function MapScreen({ navigation }) {
   const mapRef = useRef(null);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const slideAnim = useRef(new Animated.Value(300)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
 
-  // Animate floating card
   useEffect(() => {
     if (selectedPlace) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 70,
-        friction: 10,
-      }).start();
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else {
-      Animated.timing(slideAnim, {
-        toValue: 400,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 300,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
   }, [selectedPlace]);
 
+  const [saved, setSaved]       = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+
   const handleMarkerPress = (place) => {
-    console.log('🎯 Marker pressed:', place.name);
-    setSelectedPlace(place); // Update bottom sheet immediately
+    setSaved(false);
+    setBookmarked(false);
+    setSelectedPlace(place);
   };
+  const handleClose = () => setSelectedPlace(null);
 
-  const handleCalloutPress = (place) => {
-    console.log('📍 Callout pressed:', place.name);
-    setSelectedPlace(place); // Also update when callout pressed
-  };
-
-  const handleFavorite = () => {
-    console.log('❤️ Favorite:', selectedPlace.name);
-    Alert.alert('Saved!', `${selectedPlace.name} added to favorites`);
-  };
-
-  const handleNavigate = () => {
-    console.log('🧭 Navigate:', selectedPlace.name);
-    Alert.alert('Navigate', `Opening navigation to ${selectedPlace.name}`);
-  };
-
-  const handleDetails = () => {
-    console.log('➡️ Details:', selectedPlace.name);
+  const handleDetailPanel = () =>
     navigation.navigate('PlaceDetail', { place: selectedPlace });
+
+  const handleSave = () => setSaved(v => !v);
+  const handleBookmark = () => setBookmarked(v => !v);
+  const handleExpand = () =>
+    navigation.navigate('PlaceDetail', { place: selectedPlace });
+  const handleMore = () => {
+    // Placeholder — More options sheet (Sprint 3)
   };
 
   return (
     <View style={styles.container}>
 
-      {/* Map */}
+      {/* ── Map ── */}
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
@@ -158,101 +147,97 @@ export default function MapScreen({ navigation }) {
         minZoomLevel={7}
         maxZoomLevel={18}
         initialRegion={{
-          latitude: 40.3700,
-          longitude: 49.8400,
+          latitude: 40.37,
+          longitude: 49.84,
           latitudeDelta: 0.15,
           longitudeDelta: 0.15,
         }}
-        onMapReady={() => {
-          console.log('✅ Map ready');
-          mapRef.current.setMapBoundaries(
+        onMapReady={() =>
+          mapRef.current?.setMapBoundaries(
             AZERBAIJAN_BOUNDS.northEast,
-            AZERBAIJAN_BOUNDS.southWest
-          );
-        }}
+            AZERBAIJAN_BOUNDS.southWest,
+          )
+        }
+        onPress={handleClose}
       >
-        {bakuPlaces.map((place) => (
+        {bakuPlaces.map(place => (
           <PlaceMarker
             key={place.id}
             place={place}
-            onMarkerPress={handleMarkerPress}
-            onCalloutPress={handleCalloutPress}
+            isSelected={selectedPlace?.id === place.id}
+            onPress={handleMarkerPress}
           />
         ))}
       </MapView>
 
-      {/* Floating Card with Smooth Animation */}
+      {/* ── Floating Card ── */}
       {selectedPlace && (
-        <Animated.View 
+        <Animated.View
           style={[
-            styles.floatingCard,
-            { transform: [{ translateY: slideAnim }] }
+            styles.card,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
           ]}
         >
-          
-          {/* Close Button */}
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => {
-              console.log('❌ Close pressed');
-              setSelectedPlace(null);
-            }}
-          >
-            <Feather name="x" size={20} color={COLORS.textGray} />
-          </TouchableOpacity>
-
-          {/* Content */}
-          <View style={styles.sheetContent}>
-            
-            {/* Photo */}
+          {/* Photo + Blue Arrow */}
+          <View style={styles.photoWrapper}>
             <Image
               source={selectedPlace.photo}
-              style={styles.sheetPhoto}
+              style={styles.photo}
               resizeMode="cover"
             />
 
-            {/* Info */}
-            <View style={styles.sheetInfo}>
-              <Text style={styles.sheetName} numberOfLines={2}>
-                {selectedPlace.name}
-              </Text>
-              <Text style={styles.sheetCity}>
-                📍 {selectedPlace.city}
-              </Text>
-            </View>
+            {/* ↗ Blue arrow → Detail Panel */}
+            <TouchableOpacity
+              style={styles.arrowBtn}
+              onPress={handleDetailPanel}
+              activeOpacity={0.85}
+            >
+              <Feather name="arrow-up-right" size={18} color={COLORS.white} />
+            </TouchableOpacity>
 
+            {/* Close */}
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={handleClose}
+              activeOpacity={0.8}
+            >
+              <Feather name="x" size={16} color={COLORS.textGray} />
+            </TouchableOpacity>
           </View>
 
-          {/* Buttons */}
-          <View style={styles.buttonRow}>
-            
-            <TouchableOpacity 
-              style={styles.button}
-              onPress={handleFavorite}
-              activeOpacity={0.7}
-            >
-              <Feather name="heart" size={22} color={COLORS.accent} />
-              <Text style={styles.buttonText}>Save</Text>
-            </TouchableOpacity>
+          {/* Place Info */}
+          <View style={styles.info}>
+            <Text style={styles.placeName} numberOfLines={1}>
+              {selectedPlace.name}
+            </Text>
+            <Text style={styles.placeCity}>
+              📍 {selectedPlace.city}
+            </Text>
+          </View>
 
-            <TouchableOpacity 
-              style={styles.button}
-              onPress={handleNavigate}
-              activeOpacity={0.7}
-            >
-              <Feather name="navigation" size={22} color={COLORS.green} />
-              <Text style={styles.buttonText}>Navigate</Text>
-            </TouchableOpacity>
+          {/* Add to Trip — Primary CTA */}
+          <TouchableOpacity style={styles.addTripBtn} activeOpacity={0.85}>
+            <Feather name="plus-circle" size={18} color={COLORS.white} />
+            <Text style={styles.addTripText}>Add to Trip</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.button, styles.detailsBtn]}
-              onPress={handleDetails}
-              activeOpacity={0.7}
-            >
-              <Feather name="arrow-right" size={22} color={COLORS.white} />
-              <Text style={[styles.buttonText, { color: COLORS.white }]}>Details</Text>
+          {/* Icon Row */}
+          <View style={styles.iconRow}>
+            <TouchableOpacity style={styles.iconBtn} onPress={handleSave} activeOpacity={0.7}>
+              <Feather name="heart" size={20} color={saved ? COLORS.accent : COLORS.textGray} />
             </TouchableOpacity>
-
+            <TouchableOpacity style={styles.iconBtn} onPress={handleBookmark} activeOpacity={0.7}>
+              <Feather name="bookmark" size={20} color={bookmarked ? COLORS.primary : COLORS.textGray} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconBtn} onPress={handleExpand} activeOpacity={0.7}>
+              <Feather name="minimize-2" size={20} color={COLORS.textGray} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconBtn} onPress={handleMore} activeOpacity={0.7}>
+              <Feather name="more-horizontal" size={20} color={COLORS.textGray} />
+            </TouchableOpacity>
           </View>
 
         </Animated.View>
@@ -262,148 +247,139 @@ export default function MapScreen({ navigation }) {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    flex: 1,
-  },
-  
+  container: { flex: 1 },
+  map:       { flex: 1 },
+
   // Marker
-  markerContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 3,
+  marker: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2.5,
     borderColor: COLORS.white,
     overflow: 'hidden',
     backgroundColor: COLORS.white,
   },
-  markerImage: {
-    width: 50,
-    height: 50,
+  markerSelected: {
+    borderColor: COLORS.primary,
+    borderWidth: 3,
+    transform: [{ scale: 1.12 }],
   },
+  markerImage: { width: 46, height: 46 },
 
-  // Callout - Minimal Tripomatic Style
-  calloutContainer: {
-    width: 240,
-    backgroundColor: COLORS.dark,
-    borderRadius: 12,
-    padding: 10,
-    elevation: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    borderWidth: 0.5,
-    borderColor: '#404040',
-  },
-  calloutContent: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  calloutPhoto: {
-    width: 55,
-    height: 55,
-    borderRadius: 8,
-  },
-  calloutInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  calloutName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.white,
-    marginBottom: 3,
-    lineHeight: 16,
-  },
-  calloutCity: {
-    fontSize: 10,
-    color: COLORS.textGray,
-  },
-
-  // Floating Card - Center (Above Tab Bar)
-  floatingCard: {
+  // Card
+  card: {
     position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 16,
-    backgroundColor: COLORS.dark,
+    bottom: 105,
+    left: 14,
+    right: 14,
+    backgroundColor: COLORS.card,
     borderRadius: 20,
-    padding: 16,
-    elevation: 30,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    // iOS shadow
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.55,
     shadowRadius: 20,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 10,
-    padding: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14,
-  },
-  sheetContent: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    gap: 14,
-    paddingRight: 28,
-  },
-  sheetPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  sheetInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  sheetName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.white,
-    marginBottom: 6,
-    lineHeight: 21,
-  },
-  sheetCity: {
-    fontSize: 13,
-    color: COLORS.textGray,
-    fontWeight: '500',
+    // Android
+    elevation: 30,
   },
 
-  // Buttons - Compact
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 8,
+  // Photo
+  photoWrapper: {
+    width: '100%',
+    height: 180,
   },
-  button: {
-    flex: 1,
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // ↗ Blue Arrow Button
+  arrowBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+
+  // Close Button
+  closeBtn: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Info
+  info: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  placeName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textLight,
+    marginBottom: 4,
+  },
+  placeCity: {
+    fontSize: 13,
+    color: COLORS.textGray,
+  },
+
+  // Add to Trip CTA
+  addTripBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.darkCard,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#333',
+    gap: 8,
+    marginHorizontal: 16,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    marginBottom: 14,
   },
-  detailsBtn: {
-    backgroundColor: COLORS.green,
-    borderColor: COLORS.green,
-  },
-  buttonText: {
-    fontSize: 13,
+  addTripText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: COLORS.textLight,
+    color: COLORS.white,
+  },
+
+  // Icon Row
+  iconRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 8,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  iconBtn: {
+    width: 48,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
   },
 });
